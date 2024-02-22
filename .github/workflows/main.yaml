@@ -1,0 +1,59 @@
+name : deploy webapp to azure #ชื่อของ workflows
+
+env:
+    AZURE_WEBAPP_NAME: van-web-app
+
+on: #ทำงานเมื่อ branches main มีการเปลี่ยนแปลง
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs: 
+  build:
+    runs-on: ubuntu-latest #เลือก Environment เพื่อ Run workflow
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js version 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: npm install, build
+        run: npm install
+
+      - name: Zip artifact
+        run: |
+          zip -r app.zip .
+
+      - name: Diagnostic
+        run: ls -al
+      
+      - name: Package and upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app.zip
+
+      deploy:
+        permissions:
+          contents: none
+        runs-on: ubuntu-latest
+        needs: build
+        environment:
+          name: "Production"
+          url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+
+        steps:
+          - name: Download artifact from build job
+            uses: actions/download-artifact@v4
+            with:
+              name: app
+
+          - name: Deploy to Azure WebApp
+            uses: actions/download-artifact@v2
+            with:
+              app-name: ${{ env.AZURE_WEBAPP_NAME }}
+              package: app.zip
+              publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
